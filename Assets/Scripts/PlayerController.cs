@@ -136,7 +136,7 @@ public class PlayerController : MonoBehaviour
     //Movement Input Feedback
     public void MoveInput(InputAction.CallbackContext context)
     {
-        Debug.Log(context.ReadValue<Vector2>());
+        //Debug.Log(context.ReadValue<Vector2>());
         horizontalMovement = context.ReadValue<Vector2>().x;
         
     }
