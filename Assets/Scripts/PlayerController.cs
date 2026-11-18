@@ -41,12 +41,12 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float wallJumpTime = 0.5f;
     private float wallJumpTimer;
     [SerializeField] private Vector2 wallJumpPower = new Vector2(5f, 10f);
+    // How long input is ignored after a wall jump (separate from the wallJumpTime grace window)
+    [SerializeField] private float wallJumpLockTime = 0.15f;
 
     [Header("Player Collisions")]
     private BoxCollider2D bc;
 
-
-    // Start is called once before the first execution of Update after the MonoBehaviour is created
     private void Awake()
     {
         rb = GetComponent<Rigidbody2D>();
@@ -63,9 +63,10 @@ public class PlayerController : MonoBehaviour
 
         if (!isWallJumping)
         {
+            Move();
             Flip();
         }
-        Move();
+
     }
 
     /*void OnDrawGizmos()
@@ -83,6 +84,13 @@ public class PlayerController : MonoBehaviour
         if (isGrounded && !wasGrounded)
         {
             numJumps = maxJumps;
+
+            // Landing ends any wall jump immediately so Move() takes over this frame (no floor drift)
+            if (isWallJumping)
+            {
+                CancelInvoke(nameof(CancelWallJump));
+                isWallJumping = false;
+            }
         }
     }
 
@@ -180,7 +188,7 @@ public class PlayerController : MonoBehaviour
             transform.localScale = ls;
         }
 
-        Invoke(nameof(CancelWallJump), wallJumpTime + 0.1f);
+        Invoke(nameof(CancelWallJump), wallJumpLockTime);
     }
 
     private void Flip()
