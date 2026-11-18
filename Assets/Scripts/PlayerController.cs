@@ -14,10 +14,7 @@ public class PlayerController : MonoBehaviour
 
     [Header("Ground Raycasting")]
     [SerializeField] private float jumpForce = 45;
-    [SerializeField] private Transform groundCheckPoint;
-    [SerializeField] private float groundCheckY = 0.5f;
-    [SerializeField] private float groundCheckX = 0.5f;
-    [SerializeField] private LayerMask groundDef;
+    [SerializeField] private LayerMask groundLayer;
 
     [SerializeField] private Transform groundCollider;
     private Vector2 groundCheckSize = new Vector2(0.9f, 0.3f);
@@ -28,8 +25,22 @@ public class PlayerController : MonoBehaviour
 
     [SerializeField] private bool isGrounded;
 
-    [Header("Wall Checks")]
+    [Header("Direction")]
+    [SerializeField] private bool isFacingRight = true;
 
+    [Header("Wall Checks")]
+    [SerializeField] private float wallSlideSpeed = 2;
+    [SerializeField] private bool isWallSliding;
+    [SerializeField] private Transform wallCollider;
+    private Vector2 wallCheckSize = new Vector2(0.2f, 0.9f);
+    [SerializeField] private LayerMask wallLayer;
+
+    [Header("Wall Jumps")]
+    [SerializeField] private bool isWallJumping;
+    private float wallJumpDirection;
+    [SerializeField] private float wallJumpTime = 0.5f;
+    private float wallJumpTimer;
+    [SerializeField] private Vector2 wallJumpPower = new Vector2(5f, 10f);
 
     [Header("Player Collisions")]
     private BoxCollider2D bc;
@@ -45,8 +56,16 @@ public class PlayerController : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        Move();
+
         GetIsGrounded();
+        ProcessWallSlide();
+        ProcessWallJump();
+
+        if (!isWallJumping)
+        {
+            Flip();
+        }
+        Move();
     }
 
     /*void OnDrawGizmos()
@@ -55,17 +74,58 @@ public class PlayerController : MonoBehaviour
         Gizmos.matrix = groundCollider.localToWorldMatrix;
         Gizmos.DrawWireCube(Vector3.zero, new Vector3(groundCheckSize.x, groundCheckSize.y, 0.1f));
     }*/
+
+    //Environmental Collision Checks
     private void GetIsGrounded()
     {
         bool wasGrounded = isGrounded;
-        isGrounded = Physics2D.OverlapBox(groundCollider.position, groundCheckSize, 0, groundDef);
+        isGrounded = Physics2D.OverlapBox(groundCollider.position, groundCheckSize, 0, groundLayer);
         if (isGrounded && !wasGrounded)
         {
             numJumps = maxJumps;
         }
     }
 
+    private bool GetIsTouchingWall()
+    {
+        return Physics2D.OverlapBox(wallCollider.position, wallCheckSize, 0, wallLayer);
+    }
+    private void ProcessWallSlide()
+    {
+        if (!isGrounded && GetIsTouchingWall() && horizontalMovement != 0)
+        {
+            isWallSliding = true;
+            rb.linearVelocity = new Vector2(rb.linearVelocity.x, Mathf.Max(rb.linearVelocity.y, -wallSlideSpeed));
+        }
+        else
+        {
+            isWallSliding = false;
+        }
+    }
 
+    private void ProcessWallJump()
+    {
+        if (isWallSliding)
+        {
+            isWallJumping = false;
+            wallJumpDirection = -transform.localScale.x;
+            wallJumpTimer = wallJumpTime;
+
+            CancelInvoke(nameof(CancelWallJump));
+        }
+        else if (wallJumpTimer > 0f)
+        {
+            wallJumpTimer -= Time.deltaTime;
+        }
+    }
+
+    private void CancelWallJump()
+    {
+        isWallJumping = false;
+    }
+
+
+    //Movement Input Feedback
     public void MoveInput(InputAction.CallbackContext context)
     {
         Debug.Log(context.ReadValue<Vector2>());
@@ -82,7 +142,13 @@ public class PlayerController : MonoBehaviour
     {
         if (context.performed)
         {
-            if (numJumps > 0)
+            //Wall Jump
+            if (wallJumpTimer > 0f)
+            {
+                WallJump();
+            }
+            //Normal Jump
+            else if (numJumps > 0)
             {
                 rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
                 numJumps--;
@@ -90,6 +156,7 @@ public class PlayerController : MonoBehaviour
         }
         else if (context.canceled)
         {
+            //Short Jump (Jump input released)
             if (rb.linearVelocity.y > 0f)
             {
                 rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * 0.5f);
@@ -97,4 +164,33 @@ public class PlayerController : MonoBehaviour
 
         }
     }   
+
+    private void WallJump()
+    {
+        isWallJumping = true;
+        rb.linearVelocity = new Vector2(wallJumpDirection * wallJumpPower.x, wallJumpPower.y);
+        wallJumpTimer = 0;
+
+        //Force flip
+        if(transform.localScale.x != wallJumpDirection)
+        {
+            isFacingRight = !isFacingRight;
+            Vector3 ls = transform.localScale;
+            ls.x *= -1;
+            transform.localScale = ls;
+        }
+
+        Invoke(nameof(CancelWallJump), wallJumpTime + 0.1f);
+    }
+
+    private void Flip()
+    {
+        if (isFacingRight && horizontalMovement < 0 || !isFacingRight && horizontalMovement > 0)
+        {
+            isFacingRight = !isFacingRight;
+            Vector3 ls = transform.localScale;
+            ls.x *= -1;
+            transform.localScale = ls;
+        }
+    }
 }
