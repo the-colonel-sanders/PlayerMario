@@ -17,12 +17,18 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float groundCheckX = 0.5f;
     [SerializeField] private LayerMask groundDef;
 
-    [SerializeField] private bool isTouchingGround;
+    [SerializeField] private Transform groundCollider;
+    private Vector2 groundCheckSize = new Vector2(0.9f, 0.3f);
+
+    [Header("Jumping")]
+    [SerializeField] private int maxJumps = 2;
+    [SerializeField] private int numJumps = 2;
+
+    [SerializeField] private bool isGrounded;
 
     [Header("Player Collisions")]
-    [SerializeField] BoxCollider2D bc;
+    private BoxCollider2D bc;
 
-    private bool isGrounded = false;
 
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     private void Awake()
@@ -34,9 +40,11 @@ public class PlayerController : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        isTouchingGround = GetIsGrounded();
+        
         GetInputs();
         Move();
+        isGrounded = GetIsGrounded();
+        //DrawDebug();
     }
 
     void GetInputs()
@@ -46,28 +54,40 @@ public class PlayerController : MonoBehaviour
         float moveY = 0f;
 
         //Ground RayCasting and Jumping
-        float colliderDistance = bc.bounds.extents.y;
-        Debug.DrawRay(groundCheckPoint.position, new Vector2(0, -1 - groundCheckY), Color.red);
-        isGrounded = Physics2D.Raycast(groundCheckPoint.position, Vector2.down, groundCheckY, groundDef)
-            || Physics2D.Raycast(groundCheckPoint.position + new Vector3(groundCheckX, 0, 0), Vector2.down, groundCheckY, groundDef)
-            || Physics2D.Raycast(groundCheckPoint.position + new Vector3(-groundCheckX, 0, 0), Vector2.down, groundCheckY, groundDef);
-
-        if (Keyboard.current.aKey.isPressed || Keyboard.current.leftArrowKey.isPressed) moveX -= 1f;
-        if (Keyboard.current.dKey.isPressed || Keyboard.current.rightArrowKey.isPressed) moveX += 1f;
-        if (Keyboard.current.sKey.isPressed || Keyboard.current.downArrowKey.isPressed) moveY -= 1f;
-        if ((Keyboard.current.wKey.isPressed || Keyboard.current.upArrowKey.isPressed) && isTouchingGround) Jump();
+        //Debug.DrawRay(groundCheckPoint.position, new Vector2(0, -1 - groundCheckY), Color.red);
+        //isGrounded = Physics2D.Raycast(groundCheckPoint.position, Vector2.down, groundCheckY, groundDef)
+        //|| Physics2D.Raycast(groundCheckPoint.position + new Vector3(groundCheckX, 0, 0), Vector2.down, groundCheckY, groundDef)
+        //|| Physics2D.Raycast(groundCheckPoint.position + new Vector3(-groundCheckX, 0, 0), Vector2.down, groundCheckY, groundDef);
+        Keyboard kb = Keyboard.current;
+        if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) moveX -= 1f;
+        if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) moveX += 1f;
+        if (kb.sKey.isPressed || kb.downArrowKey.isPressed) moveY -= 1f;
+        if ((kb.wKey.isPressed || kb.upArrowKey.isPressed) && numJumps > 0)
+        {
+            Jump();
+        }
 
 
         moveInput = new Vector2(moveX, moveY).normalized;
     }
 
+    void OnDrawGizmos()
+    {
+        Gizmos.color = Color.red;
+        Gizmos.matrix = groundCollider.localToWorldMatrix;
+        Gizmos.DrawWireCube(Vector3.zero, new Vector3(groundCheckSize.x, groundCheckSize.y, 0.1f));
+    }
     private bool GetIsGrounded()
     {
-        float colliderDistance = bc.bounds.extents.y;
-        //return Physics2D.Raycast(transform.position, Vector2.down, colliderDistance + 0.1f, LayerMask.GetMask("Ground"));
-        return Physics2D.Raycast(groundCheckPoint.position, Vector2.down, groundCheckY, groundDef)
-            || Physics2D.Raycast(groundCheckPoint.position + new Vector3(groundCheckX, 0, 0), Vector2.down, groundCheckY, groundDef)
-            || Physics2D.Raycast(groundCheckPoint.position + new Vector3(-groundCheckX, 0, 0), Vector2.down, groundCheckY, groundDef);
+        //return Physics2D.Raycast(groundCheckPoint.position, Vector2.down, groundCheckY, groundDef)
+            //|| Physics2D.Raycast(groundCheckPoint.position + new Vector3(groundCheckX, 0, 0), Vector2.down, groundCheckY, groundDef)
+            //|| Physics2D.Raycast(groundCheckPoint.position + new Vector3(-groundCheckX, 0, 0), Vector2.down, groundCheckY, groundDef);
+        if (Physics2D.OverlapBox(groundCollider.position, groundCheckSize, 0, groundDef))
+        {
+            numJumps = maxJumps;
+            return true;
+        }
+        return false;
     }
 
     private void Move()
@@ -78,7 +98,7 @@ public class PlayerController : MonoBehaviour
 
     private void Jump()
     {
+        numJumps--;
         rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
-        //rb.AddForce(Vector2.up * jumpForce, ForceMode2D.Impulse);
     }
 }
