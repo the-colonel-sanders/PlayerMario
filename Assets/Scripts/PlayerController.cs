@@ -24,6 +24,7 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private int numJumps = 2;
 
     [SerializeField] private bool isGrounded;
+    private bool isJumpHeld;
 
     [Header("Direction")]
     [SerializeField] private bool isFacingRight = true;
@@ -32,8 +33,11 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float wallSlideSpeed = 2;
     [SerializeField] private bool isWallSliding;
     [SerializeField] private Transform wallCollider;
-    private Vector2 wallCheckSize = new Vector2(0.2f, 0.9f);
+    private Vector2 wallCheckSize = new Vector2(0.01f, 0.75f);
     [SerializeField] private LayerMask wallLayer;
+    // How long the fall eases from wallSlideSpeed back to normal gravity after leaving a wall
+    [SerializeField] private float wallSlideExitTime = 0.15f;
+    private float wallSlideExitTimer;
 
     [Header("Wall Jumps")]
     [SerializeField] private bool isWallJumping;
@@ -98,22 +102,59 @@ public class PlayerController : MonoBehaviour
     {
         return Physics2D.OverlapBox(wallCollider.position, wallCheckSize, 0, wallLayer);
     }
+    // Thin probe at the top (+1) or bottom (-1) edge of the wall check box
+    private bool WallProbe(float side)
+    {
+        Vector2 probePos = new Vector2(wallCollider.position.x, wallCollider.position.y + side * wallCheckSize.y * 0.5f);
+        return Physics2D.OverlapBox(probePos, new Vector2(wallCheckSize.x, 0.05f), 0, wallLayer);
+    }
+
+    // False when sliding off a wall's bottom edge
+    private bool GetIsWallBelow() => WallProbe(-1f);
+
+    // False when going over a wall's top edge, or when the wall is shorter than the player
+    private bool GetIsWallAbove() => WallProbe(1f);
+
     private void ProcessWallSlide()
     {
         if (!isGrounded && GetIsTouchingWall() && horizontalMovement != 0)
         {
             isWallSliding = true;
+            // Only ease the fall after leaving a wall if we left from its bottom, not when hopping over its top
+            wallSlideExitTimer = GetIsWallAbove() ? wallSlideExitTime : 0f;
             rb.linearVelocity = new Vector2(rb.linearVelocity.x, Mathf.Max(rb.linearVelocity.y, -wallSlideSpeed));
         }
         else
         {
             isWallSliding = false;
+
+            // Ease out of the slide: for a moment after leaving the wall, fall with half gravity
+            // starting from wallSlideSpeed, instead of snapping straight to full gravity
+            if (wallSlideExitTimer > 0f && !isGrounded && !isWallJumping)
+            {
+                wallSlideExitTimer -= Time.deltaTime;
+                float elapsed = wallSlideExitTime - wallSlideExitTimer;
+                float gravity = Mathf.Abs(Physics2D.gravity.y) * rb.gravityScale;
+                float maxFallSpeed = wallSlideSpeed + 0.5f * gravity * elapsed;
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, Mathf.Max(rb.linearVelocity.y, -maxFallSpeed));
+            }
+            else
+            {
+                wallSlideExitTimer = 0f;
+            }
         }
     }
 
     private void ProcessWallJump()
     {
-        if (isWallSliding)
+        if (isWallSliding && !(GetIsWallBelow() && GetIsWallAbove()))
+        {
+            // The wall doesn't cover the whole wall check: we're at its bottom edge, its top edge,
+            // or it's a small wall. No wall jump (and no forced flip); clear any leftover grace time too,
+            // so hopping again after clearing a small wall does a normal jump.
+            wallJumpTimer = 0f;
+        }
+        else if (isWallSliding)
         {
             isWallJumping = false;
             wallJumpDirection = -transform.localScale.x;
@@ -150,6 +191,11 @@ public class PlayerController : MonoBehaviour
     {
         if (context.performed)
         {
+            // Ignore extra "performed" events from other jump keys while one is already held,
+            // otherwise a second key would fire a normal jump right after the wall jump and override it
+            if (isJumpHeld) return;
+            isJumpHeld = true;
+
             //Wall Jump
             if (wallJumpTimer > 0f)
             {
@@ -164,6 +210,8 @@ public class PlayerController : MonoBehaviour
         }
         else if (context.canceled)
         {
+            isJumpHeld = false;
+
             //Short Jump (Jump input released)
             if (rb.linearVelocity.y > 0f)
             {
