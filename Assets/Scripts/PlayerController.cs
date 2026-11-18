@@ -1,4 +1,5 @@
 using System.ComponentModel.Design.Serialization;
+using System.Runtime.CompilerServices;
 using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -7,8 +8,9 @@ public class PlayerController : MonoBehaviour
 {
     [Header("Horizontal Movement Settings")]
     private Rigidbody2D rb;
-    [SerializeField] private float walkSpeed = 5;
+    [SerializeField] private float moveSpeed = 5;
     private Vector2 moveInput;
+    private float horizontalMovement;
 
     [Header("Ground Raycasting")]
     [SerializeField] private float jumpForce = 45;
@@ -26,6 +28,9 @@ public class PlayerController : MonoBehaviour
 
     [SerializeField] private bool isGrounded;
 
+    [Header("Wall Checks")]
+
+
     [Header("Player Collisions")]
     private BoxCollider2D bc;
 
@@ -40,65 +45,56 @@ public class PlayerController : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
-        
-        GetInputs();
         Move();
-        isGrounded = GetIsGrounded();
-        //DrawDebug();
+        GetIsGrounded();
     }
 
-    void GetInputs()
-    {
-        // Replaces Input.GetAxisRaw("Horizontal") and Input.GetAxisRaw("Vertical")
-        float moveX = 0f;
-        float moveY = 0f;
-
-        //Ground RayCasting and Jumping
-        //Debug.DrawRay(groundCheckPoint.position, new Vector2(0, -1 - groundCheckY), Color.red);
-        //isGrounded = Physics2D.Raycast(groundCheckPoint.position, Vector2.down, groundCheckY, groundDef)
-        //|| Physics2D.Raycast(groundCheckPoint.position + new Vector3(groundCheckX, 0, 0), Vector2.down, groundCheckY, groundDef)
-        //|| Physics2D.Raycast(groundCheckPoint.position + new Vector3(-groundCheckX, 0, 0), Vector2.down, groundCheckY, groundDef);
-        Keyboard kb = Keyboard.current;
-        if (kb.aKey.isPressed || kb.leftArrowKey.isPressed) moveX -= 1f;
-        if (kb.dKey.isPressed || kb.rightArrowKey.isPressed) moveX += 1f;
-        if (kb.sKey.isPressed || kb.downArrowKey.isPressed) moveY -= 1f;
-        if ((kb.wKey.isPressed || kb.upArrowKey.isPressed) && numJumps > 0)
-        {
-            Jump();
-        }
-
-
-        moveInput = new Vector2(moveX, moveY).normalized;
-    }
-
-    void OnDrawGizmos()
+    /*void OnDrawGizmos()
     {
         Gizmos.color = Color.red;
         Gizmos.matrix = groundCollider.localToWorldMatrix;
         Gizmos.DrawWireCube(Vector3.zero, new Vector3(groundCheckSize.x, groundCheckSize.y, 0.1f));
-    }
-    private bool GetIsGrounded()
+    }*/
+    private void GetIsGrounded()
     {
-        //return Physics2D.Raycast(groundCheckPoint.position, Vector2.down, groundCheckY, groundDef)
-            //|| Physics2D.Raycast(groundCheckPoint.position + new Vector3(groundCheckX, 0, 0), Vector2.down, groundCheckY, groundDef)
-            //|| Physics2D.Raycast(groundCheckPoint.position + new Vector3(-groundCheckX, 0, 0), Vector2.down, groundCheckY, groundDef);
-        if (Physics2D.OverlapBox(groundCollider.position, groundCheckSize, 0, groundDef))
+        bool wasGrounded = isGrounded;
+        isGrounded = Physics2D.OverlapBox(groundCollider.position, groundCheckSize, 0, groundDef);
+        if (isGrounded && !wasGrounded)
         {
             numJumps = maxJumps;
-            return true;
         }
-        return false;
+    }
+
+
+    public void MoveInput(InputAction.CallbackContext context)
+    {
+        Debug.Log(context.ReadValue<Vector2>());
+        horizontalMovement = context.ReadValue<Vector2>().x;
+        
     }
 
     private void Move()
     {
-        rb.linearVelocity = new Vector2(walkSpeed * moveInput.x, rb.linearVelocity.y);
+        rb.linearVelocity = new Vector2(moveSpeed * horizontalMovement, rb.linearVelocity.y);
     }
 
-
-    private void Jump()
+    public void Jump(InputAction.CallbackContext context)
     {
-        numJumps--;
-        rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
-    }
+        if (context.performed)
+        {
+            if (numJumps > 0)
+            {
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, jumpForce);
+                numJumps--;
+            }
+        }
+        else if (context.canceled)
+        {
+            if (rb.linearVelocity.y > 0f)
+            {
+                rb.linearVelocity = new Vector2(rb.linearVelocity.x, rb.linearVelocity.y * 0.5f);
+            }
+
+        }
+    }   
 }
